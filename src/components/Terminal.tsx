@@ -9,6 +9,7 @@ interface Props {
 
 export default function Terminal({ vm }: Props) {
     const terminalRef = useRef<HTMLDivElement | null>(null);
+    const socketRef = useRef<WebSocket | null>(null);
 
     useEffect(() => {
         if (!terminalRef.current) return;
@@ -30,25 +31,76 @@ export default function Terminal({ vm }: Props) {
         term.open(terminalRef.current);
         fitAddon.fit();
 
-        term.writeln(`\x1b[32mConnected to ${vm}\x1b[0m`);
-        term.write("$ ");
+        // ===== Connect WebSocket =====
+        const socket = new WebSocket("ws://localhost:8000/terminal/ws");
+        socketRef.current = socket;
 
+        socket.onopen = () => {
+            term.writeln("\x1b[33mConnecting to server...\x1b[0m");
+
+            // Send credentials (TEMP HARDCODE)
+            socket.send(JSON.stringify({
+                host: "your-vm-ip",
+                username: "your-username",
+                password: "your-password"
+            }));
+        };
+
+        socket.onmessage = (event) => {
+            const msg = JSON.parse(event.data);
+
+            if (msg.type === "connected") {
+                term.writeln("\x1b[32mConnected to VM\x1b[0m\r\n");
+            }
+
+            if (msg.type === "output") {
+                term.write(msg.data);
+            }
+
+            if (msg.type === "error") {
+                term.writeln(`\x1b[31m${msg.message}\x1b[0m`);
+            }
+        };
+
+        socket.onerror = () => {
+            term.writeln("\x1b[31mConnection error\x1b[0m");
+        };
+
+        socket.onclose = () => {
+            term.writeln("\r\n\x1b[31mDisconnected\x1b[0m");
+        };
+
+        // ===== Send Input to Backend =====
         term.onData((data: string) => {
-            term.write(data);
+            socket.send(JSON.stringify({
+                type: "input",
+                data: data
+            }));
         });
 
-        const resize = () => fitAddon.fit();
-        window.addEventListener("resize", resize);
+        // ===== Resize Handling =====
+        const handleResize = () => {
+            fitAddon.fit();
+
+            socket.send(JSON.stringify({
+                type: "resize",
+                cols: term.cols,
+                rows: term.rows
+            }));
+        };
+
+        window.addEventListener("resize", handleResize);
 
         return () => {
-            window.removeEventListener("resize", resize);
+            window.removeEventListener("resize", handleResize);
+            socket.close();
             term.dispose();
         };
     }, [vm]);
 
     return (
         <div className="h-full w-full p-2">
-            <div className="h-full w-full border border-slate-800 rounded-lg overflow-hidden shadow-lg">
+            <div className="h-full w-full border border-slate-800 rounded-lg overflow-hidden shadow-lg shadow-green-500/10">
                 <div ref={terminalRef} className="h-full w-full" />
             </div>
         </div>
