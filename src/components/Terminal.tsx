@@ -4,10 +4,15 @@ import { FitAddon } from "@xterm/addon-fit";
 import "@xterm/xterm/css/xterm.css";
 
 interface Props {
-    vm: string;
+    connection: {
+        host: string;
+        port: number;
+        username: string;
+        password: string;
+    };
 }
 
-export default function Terminal({ vm }: Props) {
+export default function Terminal({ connection }: Props) {
     const terminalRef = useRef<HTMLDivElement | null>(null);
     const socketRef = useRef<WebSocket | null>(null);
 
@@ -32,18 +37,15 @@ export default function Terminal({ vm }: Props) {
         fitAddon.fit();
 
         // ===== Connect WebSocket =====
-        const socket = new WebSocket("ws://localhost:8000/terminal/ws");
+        const WS_URL = import.meta.env.VITE_WS_URL || "ws://127.0.0.1:8000";
+        const socket = new WebSocket(`${WS_URL}/terminal/ws`);
         socketRef.current = socket;
 
         socket.onopen = () => {
             term.writeln("\x1b[33mConnecting to server...\x1b[0m");
 
             // Send credentials (TEMP HARDCODE)
-            socket.send(JSON.stringify({
-                host: "your-vm-ip",
-                username: "your-username",
-                password: "your-password"
-            }));
+            socket.send(JSON.stringify(connection));
         };
 
         socket.onmessage = (event) => {
@@ -72,21 +74,27 @@ export default function Terminal({ vm }: Props) {
 
         // ===== Send Input to Backend =====
         term.onData((data: string) => {
-            socket.send(JSON.stringify({
-                type: "input",
-                data: data
-            }));
+            console.log("User input:", data);
+            if (socket.readyState === WebSocket.OPEN) {
+                console.warn("WebSocket is open, sending data.");
+                socket.send(JSON.stringify({
+                    type: "input",
+                    data: data
+                }));
+            }
         });
 
         // ===== Resize Handling =====
         const handleResize = () => {
             fitAddon.fit();
 
-            socket.send(JSON.stringify({
-                type: "resize",
-                cols: term.cols,
-                rows: term.rows
-            }));
+            if (socket.readyState === WebSocket.OPEN) {
+                socket.send(JSON.stringify({
+                    type: "resize",
+                    cols: term.cols,
+                    rows: term.rows
+                }));
+            }
         };
 
         window.addEventListener("resize", handleResize);
@@ -96,7 +104,7 @@ export default function Terminal({ vm }: Props) {
             socket.close();
             term.dispose();
         };
-    }, [vm]);
+    }, [connection]);
 
     return (
         <div className="h-full w-full p-2">
