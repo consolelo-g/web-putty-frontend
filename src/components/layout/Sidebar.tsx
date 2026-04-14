@@ -1,5 +1,7 @@
+import type { SetActiveVM } from "../types";
+
 interface Props {
-    setActiveVM: (vm: string) => void;
+    setActiveVM: SetActiveVM;
 }
 
 export default function Sidebar({ setActiveVM }: Props) {
