@@ -14,6 +14,12 @@ export interface Connection {
     password: string;
 }
 
+export interface Tab {
+    id: string;           // session_id from backend
+    title: string;        // host or custom name
+    connection: Connection;
+}
+
 // ===== Safe connection (UI display only) =====
 export interface ConnectionInfo {
     host: string;

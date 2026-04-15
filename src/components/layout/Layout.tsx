@@ -27,10 +27,8 @@ export default function Layout({
                 onDisconnect={onDisconnect}
             />
 
-            <div className="flex flex-1 overflow-hidden">
-                <Sidebar setActiveVM={setActiveVM} />
-
-                <main className="flex-1 bg-slate-950">
+            <div className="flex flex-1 overflow-hidden min-h-0">
+                <main className="flex-1 bg-slate-950 min-h-0 flex flex-col">
                     {children}
                 </main>
             </div>
