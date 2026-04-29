@@ -2,76 +2,152 @@ import { useEffect, useRef } from "react";
 import { Terminal as XTerm } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import "@xterm/xterm/css/xterm.css";
+
 import type { SocketRef } from "./types";
 
 interface Props {
     sessionId: string;
     socketRef: SocketRef;
+    active: boolean;
 }
 
-export default function Terminal({ sessionId, socketRef }: Props) {
-    const terminalRef = useRef<HTMLDivElement | null>(null);
+export default function Terminal({
+    sessionId,
+    socketRef,
+    active,
+}: Props) {
+    const containerRef = useRef<HTMLDivElement | null>(null);
+    const termRef = useRef<XTerm | null>(null);
+    const fitRef = useRef<FitAddon | null>(null);
+    const resizeRef = useRef<ResizeObserver | null>(null);
 
     useEffect(() => {
-        if (!terminalRef.current) return;
+        if (!containerRef.current) return;
 
         const term = new XTerm({
             cursorBlink: true,
+            fontSize: 14,
+            fontFamily: "Consolas, monospace",
+            scrollback: 5000,
+            convertEol: true,
             theme: {
-                background: "#020617",
-                foreground: "#e2e8f0",
+                background: "#0a0a0a",
+                foreground: "#e4e4e7",
+                cursor: "#10b981",
             },
         });
 
         const fitAddon = new FitAddon();
+
         term.loadAddon(fitAddon);
-        term.open(terminalRef.current);
-        fitAddon.fit();
+        term.open(containerRef.current);
 
-        // 🟢 Listen for output
-        const handler = (e: any) => {
-            const msg = e.detail;
+        termRef.current = term;
+        fitRef.current = fitAddon;
 
-            if (msg.session_id === sessionId) {
-                term.write(msg.data);
+        const send = (payload: any) => {
+            const socket = socketRef.current;
+
+            if (socket?.readyState === WebSocket.OPEN) {
+                socket.send(JSON.stringify(payload));
             }
         };
 
-        window.addEventListener("terminal-output", handler);
+        const fit = () => {
+            if (!containerRef.current) return;
 
-        // 🟡 Send input
-        term.onData((data) => {
-            socketRef.current?.send(JSON.stringify({
-                type: "input",
-                session_id: sessionId,
-                data
-            }));
-        });
+            try {
+                fitAddon.fit();
 
-        // 🔵 Resize
-        const resize = () => {
-            fitAddon.fit();
+                send({
+                    type: "resize",
+                    session_id: sessionId,
+                    cols: term.cols,
+                    rows: term.rows,
+                });
 
-            socketRef.current?.send(JSON.stringify({
-                type: "resize",
-                session_id: sessionId,
-                cols: term.cols,
-                rows: term.rows
-            }));
+                term.refresh(0, term.rows - 1);
+            } catch { }
         };
 
-        window.addEventListener("resize", resize);
+        const outputHandler = (e: any) => {
+            const msg = e.detail;
+
+            if (msg.session_id === sessionId) {
+                term.write(msg.data, () => {
+                    if (active) term.scrollToBottom();
+                });
+            }
+        };
+
+        term.onData((data) => {
+            send({
+                type: "input",
+                session_id: sessionId,
+                data,
+            });
+        });
+
+        window.addEventListener(
+            "terminal-output",
+            outputHandler
+        );
+
+        window.addEventListener("resize", fit);
+
+        const ro = new ResizeObserver(() => {
+            if (active) fit();
+        });
+
+        ro.observe(containerRef.current);
+        resizeRef.current = ro;
+
+        setTimeout(fit, 100);
 
         return () => {
-            window.removeEventListener("terminal-output", handler);
-            window.removeEventListener("resize", resize);
+            window.removeEventListener(
+                "terminal-output",
+                outputHandler
+            );
+
+            window.removeEventListener(
+                "resize",
+                fit
+            );
+
+            ro.disconnect();
             term.dispose();
         };
     }, [sessionId]);
 
+    useEffect(() => {
+        if (!active) return;
+
+        const run = () => {
+            const term = termRef.current;
+            const fitAddon = fitRef.current;
+
+            if (!term || !fitAddon) return;
+
+            fitAddon.fit();
+
+            term.refresh(0, term.rows - 1);
+
+            requestAnimationFrame(() => {
+                term.scrollToBottom();
+                term.focus();
+            });
+        };
+
+        setTimeout(run, 50);
+    }, [active]);
+
     return (
-        <div className="h-full w-full min-h-0 flex">
-            <div ref={terminalRef} className="flex-1 min-h-0" />
+        <div className="w-full h-full min-h-0 p-2 bg-[#0a0a0a] overflow-hidden">
+            <div
+                ref={containerRef}
+                className="w-full h-full min-h-0 rounded-2xl border border-zinc-800 overflow-hidden"
+            />
         </div>
     );
 }

@@ -1,159 +1,243 @@
-import { useState, useRef, useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import { X } from "lucide-react";
+
+import { getToken } from "../utils/auth";
+
 import type { Connection } from "./types";
 
 interface Props {
     onConnect: (data: Connection) => void;
     onClose: () => void;
-    initialData?: Omit<Connection, "password">;
+    initialData?: Omit<
+        Connection,
+        "password"
+    >;
 }
 
-export default function ConnectForm({ onConnect, onClose, initialData }: Props) {
-    const [form, setForm] = useState({
-        host: initialData?.host || "",
-        port: initialData?.port || 22,
-        username: initialData?.username || "",
-        password: "",
-    });
+export default function ConnectForm({
+    onConnect,
+    onClose,
+    initialData,
+}: Props) {
+    const [form, setForm] =
+        useState({
+            host:
+                initialData?.host ||
+                "",
+            port:
+                initialData?.port ||
+                22,
+            username:
+                initialData?.username ||
+                "",
+            password: "",
+        });
 
-    const [error, setError] = useState("");
-    const isReconnect = !!initialData;
+    const [error, setError] =
+        useState("");
 
-    const isValid = isReconnect
-        ? form.password.trim() !== ""
-        : form.host.trim() !== "" &&
-        form.username.trim() !== "" &&
-        form.password.trim() !== "" &&
-        form.port > 0;
+    const [loading, setLoading] =
+        useState(false);
 
-    const handleSubmit = () => {
-        if (!isValid) {
-            setError("All fields are required and must be valid.");
-            return;
-        }
-
-        setError("");
-        onConnect(form);
-    };
-
-    const hostRef = useRef<HTMLInputElement | null>(null);
-    const passwordRef = useRef<HTMLInputElement | null>(null);
+    const hostRef =
+        useRef<HTMLInputElement | null>(
+            null
+        );
 
     useEffect(() => {
-        if (isReconnect) {
-            passwordRef.current?.focus();
-        } else {
-            hostRef.current?.focus();
-        }
-    }, [isReconnect]);
+        hostRef.current?.focus();
+    }, []);
+
+    const valid =
+        form.host.trim() &&
+        form.username.trim() &&
+        form.password.trim();
+
+    const submit =
+        async () => {
+            if (!valid) return;
+
+            try {
+                setLoading(true);
+                setError("");
+
+                const token =
+                    getToken();
+
+                await fetch(
+                    "http://127.0.0.1:8000/sessions/",
+                    {
+                        method:
+                            "POST",
+                        headers: {
+                            "Content-Type":
+                                "application/json",
+                            Authorization:
+                                `Bearer ${token}`,
+                        },
+                        body: JSON.stringify(
+                            {
+                                host: form.host,
+                                port: form.port,
+                                username:
+                                    form.username,
+                            }
+                        ),
+                    }
+                );
+
+                onConnect(
+                    form
+                );
+
+            } catch {
+                setError(
+                    "Unable to save server"
+                );
+            } finally {
+                setLoading(false);
+            }
+        };
 
     return (
         <div
-            className="flex flex-col gap-4 relative"
-            onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                    e.preventDefault();
-                    handleSubmit();
+            className="relative"
+            onKeyDown={(
+                e
+            ) => {
+                if (
+                    e.key ===
+                    "Enter"
+                ) {
+                    submit();
                 }
             }}
         >
-            {/* Close Button */}
+            {/* Close */}
             <button
-                onClick={onClose}
-                className="absolute top-3 right-3 text-slate-400 hover:text-white hover:bg-slate-800 p-1.5 rounded transition"
+                onClick={
+                    onClose
+                }
+                className="absolute top-0 right-0 w-9 h-9 rounded-xl border border-zinc-800 bg-[#171717] hover:bg-[#1d1d1d] flex items-center justify-center text-zinc-400"
             >
-                <X size={18} />
+                <X size={16} />
             </button>
 
-            {/* Title */}
-            <h2 className="text-lg font-semibold text-white pt-4">
-                {isReconnect ? "Reconnect to VM" : "Connect to VM"}
+            <h2 className="text-2xl font-semibold text-white">
+                New Connection
             </h2>
 
-            {/* Host */}
-            {!isReconnect && (
-                <div className="flex flex-col gap-1">
-                    <label className="text-sm text-slate-400">Host</label>
-                    <input
-                        ref={hostRef}
-                        placeholder="e.g. 192.168.1.10"
-                        className="bg-slate-800 px-3 py-2 rounded border border-slate-700 focus:outline-none focus:ring-2 focus:ring-green-500"
-                        value={form.host}
-                        onChange={(e) =>
-                            setForm({ ...form, host: e.target.value })
-                        }
-                    />
-                </div>
-            )}
+            <p className="mt-1 text-sm text-zinc-500">
+                Save and connect to SSH server
+            </p>
 
-            {/* Port */}
-            {!isReconnect && (
-                <div className="flex flex-col gap-1">
-                    <label className="text-sm text-slate-400">Port</label>
-                    <input
-                        type="number"
-                        value={form.port}
-                        className="bg-slate-800 px-3 py-2 rounded border border-slate-700 focus:outline-none focus:ring-2 focus:ring-green-500"
-                        onChange={(e) =>
-                            setForm({ ...form, port: Number(e.target.value) })
-                        }
-                    />
-                </div>
-            )}
+            {/* Inputs */}
+            <div className="mt-6 space-y-4">
 
-            {/* Username */}
-            {!isReconnect && (
-                <div className="flex flex-col gap-1">
-                    <label className="text-sm text-slate-400">Username</label>
-                    <input
-                        value={form.username}
-                        placeholder="Enter username"
-                        className="bg-slate-800 px-3 py-2 rounded border border-slate-700 focus:outline-none focus:ring-2 focus:ring-green-500"
-                        onChange={(e) =>
-                            setForm({ ...form, username: e.target.value })
-                        }
-                    />
-                </div>
-            )}
-
-            {isReconnect && (
-                <div className="text-sm text-slate-400 bg-slate-800 px-3 py-2 rounded border border-slate-700">
-                    {form.username}@{form.host}:{form.port}
-                </div>
-            )}
-
-            {/* Password */}
-            <div className="flex flex-col gap-1">
-                <label className="text-sm text-slate-400">Password</label>
                 <input
-                    ref={passwordRef}
-                    type="password"
-                    placeholder="Enter password"
-                    className="bg-slate-800 px-3 py-2 rounded border border-slate-700 focus:outline-none focus:ring-2 focus:ring-green-500"
-                    onChange={(e) =>
-                        setForm({ ...form, password: e.target.value })
+                    ref={
+                        hostRef
                     }
+                    placeholder="Host / IP"
+                    value={
+                        form.host
+                    }
+                    onChange={(
+                        e
+                    ) =>
+                        setForm({
+                            ...form,
+                            host: e
+                                .target
+                                .value,
+                        })
+                    }
+                    className="w-full h-11 px-4 rounded-xl bg-[#171717] border border-zinc-800 text-white outline-none focus:border-emerald-500"
                 />
+
+                <input
+                    type="number"
+                    placeholder="Port"
+                    value={
+                        form.port
+                    }
+                    onChange={(
+                        e
+                    ) =>
+                        setForm({
+                            ...form,
+                            port: Number(
+                                e
+                                    .target
+                                    .value
+                            ),
+                        })
+                    }
+                    className="w-full h-11 px-4 rounded-xl bg-[#171717] border border-zinc-800 text-white outline-none focus:border-emerald-500"
+                />
+
+                <input
+                    placeholder="Username"
+                    value={
+                        form.username
+                    }
+                    onChange={(
+                        e
+                    ) =>
+                        setForm({
+                            ...form,
+                            username:
+                                e
+                                    .target
+                                    .value,
+                        })
+                    }
+                    className="w-full h-11 px-4 rounded-xl bg-[#171717] border border-zinc-800 text-white outline-none focus:border-emerald-500"
+                />
+
+                <input
+                    type="password"
+                    placeholder="Password"
+                    value={
+                        form.password
+                    }
+                    onChange={(
+                        e
+                    ) =>
+                        setForm({
+                            ...form,
+                            password:
+                                e
+                                    .target
+                                    .value,
+                        })
+                    }
+                    className="w-full h-11 px-4 rounded-xl bg-[#171717] border border-zinc-800 text-white outline-none focus:border-emerald-500"
+                />
+
             </div>
 
-            {/* Error Message */}
             {error && (
-                <div className="text-red-400 text-sm">
+                <p className="mt-4 text-sm text-red-400">
                     {error}
-                </div>
+                </p>
             )}
 
-            {/* Button */}
             <button
-                onClick={handleSubmit}
-                disabled={!isValid}
-                className={`mt-2 py-2 rounded font-medium transition ${isValid
-                    ? "bg-green-600 hover:bg-green-700"
-                    : "bg-slate-700 cursor-not-allowed"
-                    }`}
+                onClick={
+                    submit
+                }
+                disabled={
+                    loading ||
+                    !valid
+                }
+                className="mt-6 w-full h-11 rounded-xl bg-emerald-500 text-black font-medium hover:bg-emerald-400 transition disabled:opacity-60"
             >
-                {isReconnect ? "Reconnect" : "Connect"}
+                {loading
+                    ? "Saving..."
+                    : "Save & Connect"}
             </button>
+
         </div>
     );
 }

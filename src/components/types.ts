@@ -6,7 +6,7 @@ export type Status =
     | "disconnected"
     | "error";
 
-// ===== Connection (full payload for backend) =====
+// ===== Connection =====
 export interface Connection {
     host: string;
     port: number;
@@ -14,21 +14,41 @@ export interface Connection {
     password: string;
 }
 
+// ===== Tab =====
 export interface Tab {
-    id: string;           // session_id from backend
-    title: string;        // host or custom name
+    id: string;                 // session id
+    title: string;              // Tab 1 / Tab 2
+    serverKey: string;          // unique server key
     connection: Connection;
+    createdAt: number;
 }
 
-// ===== Safe connection (UI display only) =====
+// ===== UI Safe =====
 export interface ConnectionInfo {
     host: string;
     username: string;
 }
 
-// ===== WebSocket Ref =====
-export type SocketRef = React.MutableRefObject<WebSocket | null>;
+// ===== WebSocket =====
+export type SocketRef =
+    React.MutableRefObject<WebSocket | null>;
 
-// ===== Generic Helpers =====
-export type SetStatus = (status: Status) => void;
-export type SetActiveVM = (vm: string) => void;
+// ===== Helpers =====
+export type SetStatus = (
+    status: Status
+) => void;
+
+export type SetActiveVM = (
+    vm: string
+) => void;
+
+export type ViewState =
+    | "empty"
+    | "overview"
+    | "terminal";
+
+// ===== Utils =====
+export const getServerKey = (
+    c: Connection
+) =>
+    `${c.host}:${c.port}:${c.username}`;

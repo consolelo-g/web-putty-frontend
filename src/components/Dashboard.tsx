@@ -1,166 +1,550 @@
+// Dashboard.tsx
+
 import { useEffect, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
+
 import Layout from "../components/layout/Layout";
+import Sidebar from "../components/layout/Sidebar";
+import TerminalTabs from "../components/TerminalTabs";
 import Terminal from "../components/Terminal";
 import ConnectForm from "./ConnectForm";
-import TerminalTabs from "../components/TerminalTabs";
-import type { Connection, Status, Tab } from "./types";
+
+import { getToken } from "../utils/auth";
+
+import type {
+    Connection,
+    Status,
+    Tab,
+} from "./types";
+
+import {
+    getServerKey,
+} from "./types";
+
+type View =
+    | "empty"
+    | "overview"
+    | "terminal";
 
 export default function Dashboard() {
-    const socketRef = useRef<WebSocket | null>(null);
+    const socketRef =
+        useRef<WebSocket | null>(null);
 
-    const [tabs, setTabs] = useState<Tab[]>([]);
-    const [activeTabId, setActiveTabId] = useState<string | null>(null);
-    const [status, setStatus] = useState<Status>("idle");
-    const [showForm, setShowForm] = useState(false);
+    const [searchParams] =
+        useSearchParams();
 
-    // 🌐 INIT SINGLE WEBSOCKET
+    const [status, setStatus] =
+        useState<Status>("idle");
+
+    const [connections, setConnections] =
+        useState<Connection[]>([]);
+
+    const [selected, setSelected] =
+        useState<Connection | null>(null);
+
+    const [tabs, setTabs] =
+        useState<Tab[]>([]);
+
+    const [activeTabId, setActiveTabId] =
+        useState<string | null>(null);
+
+    const [view, setView] =
+        useState<View>("empty");
+
+    const [showForm, setShowForm] =
+        useState(false);
+
+    const activeTab = tabs.find(
+        (t) => t.id === activeTabId
+    );
+
+    const activeServerKey =
+        activeTab?.serverKey ||
+        (selected
+            ? getServerKey(selected)
+            : null);
+
+    const visibleTabs = tabs.filter(
+        (t) =>
+            t.serverKey ===
+            activeServerKey
+    );
+
     useEffect(() => {
-        const WS_URL = import.meta.env.VITE_WS_URL || "ws://127.0.0.1:8000";
-        const socket = new WebSocket(`${WS_URL}/terminal/ws`);
-        socketRef.current = socket;
-
-        socket.onopen = () => {
-            console.log("WebSocket connected");
-        };
-
-        socket.onmessage = (event) => {
-            const msg = JSON.parse(event.data);
-
-            if (msg.type === "created") {
-                const session_id = msg.session_id;
-
-                setTabs(prev => {
-                    const last = prev[prev.length - 1];
-                    if (!last) return prev;
-
-                    // attach session_id to last created tab
-                    return prev.map((t, i) =>
-                        i === prev.length - 1
-                            ? { ...t, id: session_id }
-                            : t
-                    );
-                });
-
-                setActiveTabId(session_id);
-                setStatus("connected");
-            }
-
-            if (msg.type === "output") {
-                // handled inside Terminal via event bus (next step)
-                window.dispatchEvent(new CustomEvent("terminal-output", {
-                    detail: msg
-                }));
-            }
-
-            if (msg.type === "error") {
-                setStatus("error");
-            }
-        };
-
-        socket.onclose = () => {
-            setStatus("disconnected");
-        };
-
-        return () => socket.close();
+        if (
+            searchParams.get("new") ===
+            "true"
+        ) {
+            setShowForm(true);
+        }
     }, []);
 
-    // ➕ CREATE TAB
-    const createTab = (connection: Connection) => {
-        setStatus("connecting");
+    useEffect(() => {
+        const load = async () => {
+            const token =
+                getToken();
 
-        const tempTab: Tab = {
-            id: "pending-" + Date.now(),
-            title: connection.host,
-            connection
+            const res =
+                await fetch(
+                    "http://127.0.0.1:8000/sessions/",
+                    {
+                        headers: {
+                            Authorization:
+                                `Bearer ${token}`,
+                        },
+                    }
+                );
+
+            if (!res.ok) return;
+
+            const data =
+                await res.json();
+
+            setConnections(
+                Array.isArray(data)
+                    ? data
+                    : data.sessions ||
+                    []
+            );
         };
 
-        setTabs(prev => [...prev, tempTab]);
+        load();
+    }, []);
 
-        socketRef.current?.send(JSON.stringify({
-            type: "create",
-            payload: connection
-        }));
+    useEffect(() => {
+        const token =
+            getToken();
 
-        setShowForm(false);
+        if (!token) return;
+
+        const socket =
+            new WebSocket(
+                `ws://127.0.0.1:8000/terminal/ws?token=${token}`
+            );
+
+        socketRef.current =
+            socket;
+
+        socket.onopen = () =>
+            setStatus("idle");
+
+        socket.onmessage = (
+            event
+        ) => {
+            const msg =
+                JSON.parse(
+                    event.data
+                );
+
+            if (
+                msg.type ===
+                "created"
+            ) {
+                setTabs((prev) =>
+                    prev.map(
+                        (
+                            t,
+                            i
+                        ) =>
+                            i ===
+                                prev.length -
+                                1
+                                ? {
+                                    ...t,
+                                    id: msg.session_id,
+                                }
+                                : t
+                    )
+                );
+
+                setActiveTabId(
+                    msg.session_id
+                );
+
+                setView(
+                    "terminal"
+                );
+
+                setStatus(
+                    "connected"
+                );
+            }
+
+            if (
+                msg.type ===
+                "output"
+            ) {
+                window.dispatchEvent(
+                    new CustomEvent(
+                        "terminal-output",
+                        {
+                            detail:
+                                msg,
+                        }
+                    )
+                );
+            }
+        };
+
+        socket.onclose =
+            () =>
+                setStatus(
+                    "disconnected"
+                );
+
+        return () =>
+            socket.close();
+    }, []);
+
+    const connect = (
+        conn: Connection
+    ) => {
+        const key =
+            getServerKey(conn);
+
+        const count =
+            tabs.filter(
+                (t) =>
+                    t.serverKey ===
+                    key
+            ).length + 1;
+
+        const tempTab: Tab = {
+            id:
+                "pending-" +
+                Date.now(),
+            title: `Tab ${count}`,
+            serverKey: key,
+            connection: conn,
+            createdAt:
+                Date.now(),
+        };
+
+        setTabs((prev) => [
+            ...prev,
+            tempTab,
+        ]);
+
+        setSelected(conn);
+        setStatus(
+            "connecting"
+        );
+        setView(
+            "terminal"
+        );
+        setActiveTabId(
+            tempTab.id
+        );
+
+        socketRef.current?.send(
+            JSON.stringify({
+                type: "create",
+                payload: conn,
+            })
+        );
     };
 
-    // ❌ CLOSE TAB
-    const closeTab = (id: string) => {
-        socketRef.current?.send(JSON.stringify({
-            type: "close",
-            session_id: id
-        }));
+    const handleSelectServer = (
+        c: Connection
+    ) => {
+        setSelected(c);
 
-        setTabs(prev => prev.filter(t => t.id !== id));
+        const key =
+            getServerKey(c);
 
-        if (activeTabId === id) {
-            const remaining = tabs.filter(t => t.id !== id);
-            setActiveTabId(remaining[0]?.id || null);
+        const serverTabs =
+            tabs.filter(
+                (t) =>
+                    t.serverKey ===
+                    key
+            );
+
+        if (
+            serverTabs.length > 0
+        ) {
+            const latest =
+                serverTabs[
+                serverTabs.length -
+                1
+                ];
+
+            setActiveTabId(
+                latest.id
+            );
+
+            setView(
+                "terminal"
+            );
+        } else {
+            setView(
+                "overview"
+            );
         }
     };
 
-    const activeTab = tabs.find(t => t.id === activeTabId);
+    const closeTab = (
+        id: string
+    ) => {
+        const remaining =
+            tabs.filter(
+                (t) =>
+                    t.id !== id
+            );
+
+        socketRef.current?.send(
+            JSON.stringify({
+                type: "close",
+                session_id: id,
+            })
+        );
+
+        setTabs(
+            remaining
+        );
+
+        if (
+            activeTabId === id
+        ) {
+            if (
+                remaining.length >
+                0
+            ) {
+                setActiveTabId(
+                    remaining[
+                        remaining.length -
+                        1
+                    ].id
+                );
+            } else {
+                setActiveTabId(
+                    null
+                );
+
+                setView(
+                    "empty"
+                );
+            }
+        }
+    };
 
     return (
         <Layout
-            setActiveVM={() => { }}
             status={status}
-            connection={activeTab ? {
-                host: activeTab.connection.host,
-                username: activeTab.connection.username
-            } : null}
-            onDisconnect={() => {
+            activeSession={
+                activeTab
+                    ?.connection
+                    .host || null
+            }
+            onDisconnectAll={() => {
                 socketRef.current?.close();
+
                 setTabs([]);
-                setActiveTabId(null);
+                setView(
+                    "empty"
+                );
+                setActiveTabId(
+                    null
+                );
             }}
         >
-            <div className="flex flex-col h-full min-h-0">
+            <Sidebar
+                connections={
+                    connections
+                }
+                selected={
+                    selected
+                }
+                tabs={tabs}
+                onSelect={
+                    handleSelectServer
+                }
+                onAdd={() =>
+                    setShowForm(true)
+                }
+                onDisconnectServer={(
+                    conn
+                ) => {
+                    const key =
+                        getServerKey(
+                            conn
+                        );
 
-                {/* 🔥 Tabs */}
-                <TerminalTabs
-                    tabs={tabs}
-                    activeTabId={activeTabId}
-                    onSwitch={setActiveTabId}
-                    onClose={closeTab}
-                    onNew={() => setShowForm(true)}
-                />
+                    const serverTabs =
+                        tabs.filter(
+                            (t) =>
+                                t.serverKey ===
+                                key
+                        );
 
-                {/* 🖥 Terminal */}
-                <div className="flex-1 relative min-h-0 overflow-hidden">
+                    serverTabs.forEach(
+                        (tab) => {
+                            socketRef.current?.send(
+                                JSON.stringify(
+                                    {
+                                        type: "close",
+                                        session_id:
+                                            tab.id,
+                                    }
+                                )
+                            );
+                        }
+                    );
 
-                    {tabs.map(tab => (
-                        <div
-                            key={tab.id}
-                            className={`absolute inset-0 min-h-0 ${tab.id === activeTabId ? "block" : "hidden"
-                                }`}
-                        >
-                            <Terminal
-                                sessionId={tab.id}
-                                socketRef={socketRef}
-                            />
-                        </div>
-                    ))}
+                    const remaining =
+                        tabs.filter(
+                            (t) =>
+                                t.serverKey !==
+                                key
+                        );
 
-                    {tabs.length === 0 && (
-                        <div className="flex items-center justify-center h-full text-slate-500">
-                            No active terminal
+                    setTabs(
+                        remaining
+                    );
+
+                    if (
+                        remaining.length >
+                        0
+                    ) {
+                        setActiveTabId(
+                            remaining[
+                                remaining.length -
+                                1
+                            ].id
+                        );
+
+                        setView(
+                            "terminal"
+                        );
+                    } else {
+                        setActiveTabId(
+                            null
+                        );
+
+                        setView(
+                            "empty"
+                        );
+                    }
+                }}
+            />
+
+            <div className="flex flex-col flex-1 min-h-0 h-full overflow-hidden bg-[#0a0a0a]">
+
+                {view ===
+                    "terminal" && (
+                        <TerminalTabs
+                            tabs={
+                                visibleTabs
+                            }
+                            activeTabId={
+                                activeTabId
+                            }
+                            onSwitch={
+                                setActiveTabId
+                            }
+                            onClose={
+                                closeTab
+                            }
+                            onNew={() => {
+                                if (
+                                    selected
+                                ) {
+                                    connect(
+                                        selected
+                                    );
+                                }
+                            }}
+                        />
+                    )}
+
+                {view ===
+                    "empty" && (
+                        <div className="flex-1 flex items-center justify-center text-zinc-500">
+                            No Active Session
                         </div>
                     )}
-                </div>
 
-                {/* 🧾 Connect Modal */}
-                {showForm && (
-                    <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
-                        <div className="bg-slate-900 p-4 rounded w-[400px]">
-                            <ConnectForm
-                                onConnect={createTab}
-                                onClose={() => setShowForm(false)}
-                            />
+                {view ===
+                    "overview" &&
+                    selected && (
+                        <div className="p-8">
+                            <button
+                                onClick={() =>
+                                    connect(
+                                        selected
+                                    )
+                                }
+                                className="h-11 px-5 rounded-xl bg-emerald-500 text-black font-medium"
+                            >
+                                Connect
+                            </button>
                         </div>
-                    </div>
-                )}
+                    )}
+
+                {view ===
+                    "terminal" && (
+                        <div className="relative flex-1 min-h-0 h-full overflow-hidden">
+                            {tabs.map(
+                                (
+                                    tab
+                                ) => (
+                                    <div
+                                        key={
+                                            tab.id
+                                        }
+                                        className={
+                                            tab.id === activeTabId
+                                                ? "absolute inset-0 visible z-10"
+                                                : "absolute inset-0 invisible pointer-events-none z-0"
+                                        }
+                                    >
+                                        <Terminal
+                                            sessionId={
+                                                tab.id
+                                            }
+                                            socketRef={
+                                                socketRef
+                                            }
+                                            active={
+                                                tab.id ===
+                                                activeTabId
+                                            }
+                                        />
+                                    </div>
+                                )
+                            )}
+                        </div>
+                    )}
             </div>
+
+            {showForm && (
+                <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4">
+                    <div className="w-full max-w-md rounded-3xl border border-zinc-800 bg-[#111111] p-6">
+                        <ConnectForm
+                            onConnect={(
+                                c
+                            ) => {
+                                setConnections(
+                                    (
+                                        prev
+                                    ) => [
+                                            ...prev,
+                                            c,
+                                        ]
+                                );
+
+                                setShowForm(
+                                    false
+                                );
+                            }}
+                            onClose={() =>
+                                setShowForm(
+                                    false
+                                )
+                            }
+                        />
+                    </div>
+                </div>
+            )}
         </Layout>
     );
 }
