@@ -8,8 +8,6 @@ export default function Login() {
 
     const [step, setStep] = useState<"email" | "otp">("email");
 
-    const wsUrl = import.meta.env.VITE_WS_URL;
-
     const apiUrl = import.meta.env.VITE_API_URL;
 
     const [email, setEmail] = useState("");
