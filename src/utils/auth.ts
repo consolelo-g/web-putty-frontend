@@ -1,3 +1,5 @@
+import { jwtDecode } from "jwt-decode";
+
 const TOKEN_KEY = "webputty_token";
 
 export function saveToken(token: string) {
@@ -14,4 +16,16 @@ export function logout() {
 
 export function isAuthenticated(): boolean {
     return !!getToken();
+}
+
+export function isAdmin(): boolean {
+    const token = getToken();
+    if (!token) return false;
+
+    try {
+        const payload: any = jwtDecode(token);
+        return payload.role === "admin";
+    } catch {
+        return false;
+    }
 }

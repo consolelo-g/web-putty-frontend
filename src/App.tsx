@@ -9,6 +9,7 @@ import Login from "./components/Login";
 import Dashboard from "./components/Dashboard";
 
 import ProtectedRoute from "./components/ProtectedRoute";
+import AdminPanel from "./components/AdminPanel";
 
 export default function App() {
   return (
@@ -37,6 +38,12 @@ export default function App() {
             </ProtectedRoute>
           }
         />
+
+        {/* <Route path="/admin" element={
+          <ProtectedRoute>
+            <AdminPanel />
+          </ProtectedRoute>
+        } /> */}
 
       </Routes>
     </BrowserRouter>

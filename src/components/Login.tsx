@@ -6,32 +6,66 @@ import { saveToken } from "../utils/auth";
 export default function Login() {
     const navigate = useNavigate();
 
-    const [password, setPassword] =
-        useState("");
+    const [step, setStep] = useState<"email" | "otp">("email");
 
-    const [loading, setLoading] =
-        useState(false);
+    const [email, setEmail] = useState("");
+    const [otp, setOtp] = useState("");
 
-    const [error, setError] =
-        useState("");
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState("");
 
-    const handleLogin = async () => {
-        if (!password.trim()) return;
+    // ----------------------------
+    // REQUEST OTP
+    // ----------------------------
+    const handleRequestOtp = async () => {
+        if (!email.trim()) return;
 
         try {
             setLoading(true);
             setError("");
 
             const res = await fetch(
-                "http://127.0.0.1:8000/auth/login",
+                "http://127.0.0.1:8000/auth/request-otp",
                 {
                     method: "POST",
                     headers: {
-                        "Content-Type":
-                            "application/json",
+                        "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify({ email }),
+                }
+            );
+
+            await res.json(); // always generic response
+
+            setStep("otp");
+
+        } catch {
+            setError("Server unavailable");
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    // ----------------------------
+    // VERIFY OTP
+    // ----------------------------
+    const handleVerifyOtp = async () => {
+        if (!otp.trim()) return;
+
+        try {
+            setLoading(true);
+            setError("");
+
+            const res = await fetch(
+                "http://127.0.0.1:8000/auth/verify-otp",
+                {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
                     },
                     body: JSON.stringify({
-                        password,
+                        email,
+                        otp,
                     }),
                 }
             );
@@ -39,23 +73,15 @@ export default function Login() {
             const data = await res.json();
 
             if (!res.ok) {
-                setError(
-                    data.detail ||
-                    "Login failed"
-                );
+                setError(data.detail || "Invalid OTP");
                 return;
             }
 
-            saveToken(
-                data.access_token
-            );
-
+            saveToken(data.access_token);
             navigate("/app");
 
         } catch {
-            setError(
-                "Server unavailable"
-            );
+            setError("Server unavailable");
         } finally {
             setLoading(false);
         }
@@ -71,33 +97,65 @@ export default function Login() {
                 </h1>
 
                 <p className="mt-2 text-sm text-zinc-500">
-                    Secure access required
+                    {step === "email"
+                        ? "Enter your email to receive OTP"
+                        : "Enter the OTP sent to your email"}
                 </p>
 
-                <div className="mt-6">
-                    <label className="text-sm text-zinc-400">
-                        Access Password
-                    </label>
+                {/* EMAIL STEP */}
+                {step === "email" && (
+                    <div className="mt-6">
+                        <label className="text-sm text-zinc-400">
+                            Email
+                        </label>
 
-                    <input
-                        type="password"
-                        value={password}
-                        onChange={(e) =>
-                            setPassword(
-                                e.target.value
-                            )
-                        }
-                        onKeyDown={(e) => {
-                            if (
-                                e.key === "Enter"
-                            ) {
-                                handleLogin();
+                        <input
+                            type="email"
+                            value={email}
+                            onChange={(e) =>
+                                setEmail(e.target.value)
                             }
-                        }}
-                        className="mt-2 w-full h-11 px-4 rounded-xl bg-[#171717] border border-zinc-800 text-white outline-none focus:border-emerald-500"
-                        placeholder="Enter password"
-                    />
-                </div>
+                            onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                    handleRequestOtp();
+                                }
+                            }}
+                            className="mt-2 w-full h-11 px-4 rounded-xl bg-[#171717] border border-zinc-800 text-white outline-none focus:border-emerald-500"
+                            placeholder="Enter your email"
+                        />
+                    </div>
+                )}
+
+                {/* OTP STEP */}
+                {step === "otp" && (
+                    <div className="mt-6">
+                        <label className="text-sm text-zinc-400">
+                            OTP
+                        </label>
+
+                        <input
+                            type="text"
+                            value={otp}
+                            onChange={(e) =>
+                                setOtp(e.target.value)
+                            }
+                            onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                    handleVerifyOtp();
+                                }
+                            }}
+                            className="mt-2 w-full h-11 px-4 rounded-xl bg-[#171717] border border-zinc-800 text-white outline-none focus:border-emerald-500 tracking-widest text-center"
+                            placeholder="Enter 6-digit OTP"
+                        />
+
+                        <button
+                            onClick={() => setStep("email")}
+                            className="mt-3 text-xs text-zinc-500 hover:text-white"
+                        >
+                            Change email
+                        </button>
+                    </div>
+                )}
 
                 {error && (
                     <p className="mt-3 text-sm text-red-400">
@@ -107,14 +165,18 @@ export default function Login() {
 
                 <button
                     onClick={
-                        handleLogin
+                        step === "email"
+                            ? handleRequestOtp
+                            : handleVerifyOtp
                     }
                     disabled={loading}
                     className="mt-6 w-full h-11 rounded-xl bg-emerald-500 text-black font-medium hover:bg-emerald-400 transition disabled:opacity-60"
                 >
                     {loading
-                        ? "Checking..."
-                        : "Enter Workspace"}
+                        ? "Please wait..."
+                        : step === "email"
+                            ? "Send OTP"
+                            : "Verify & Enter"}
                 </button>
 
             </div>

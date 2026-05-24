@@ -6,6 +6,8 @@ interface Props {
     status: Status;
     activeSession?: string | null;
     onDisconnectAll: () => void;
+    onOpenAdmin?: () => void;
+    isAdmin?: boolean;
 }
 
 export default function Layout({
@@ -13,6 +15,8 @@ export default function Layout({
     status,
     activeSession,
     onDisconnectAll,
+    onOpenAdmin,
+    isAdmin,
 }: Props) {
     return (
         <div className="h-screen w-screen bg-[#0a0a0a] text-white flex flex-col overflow-hidden">
@@ -21,6 +25,8 @@ export default function Layout({
                 status={status}
                 activeSession={activeSession}
                 onDisconnectAll={onDisconnectAll}
+                onOpenAdmin={onOpenAdmin}
+                isAdmin={isAdmin}
             />
 
             <main className="flex-1 min-h-0 flex overflow-hidden">

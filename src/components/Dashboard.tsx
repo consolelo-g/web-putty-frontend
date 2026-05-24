@@ -9,7 +9,7 @@ import TerminalTabs from "../components/TerminalTabs";
 import Terminal from "../components/Terminal";
 import ConnectForm from "./ConnectForm";
 
-import { getToken } from "../utils/auth";
+import { getToken, isAdmin } from "../utils/auth";
 
 import type {
     Connection,
@@ -20,11 +20,13 @@ import type {
 import {
     getServerKey,
 } from "./types";
+import AdminPanel from "./AdminPanel";
 
 type View =
     | "empty"
     | "overview"
-    | "terminal";
+    | "terminal"
+    | "admin";
 
 export default function Dashboard() {
     const socketRef =
@@ -32,6 +34,12 @@ export default function Dashboard() {
 
     const [searchParams] =
         useSearchParams();
+
+    const admin = isAdmin();
+
+    const openAdmin = () => {
+        setView("admin");
+    };
 
     const [status, setStatus] =
         useState<Status>("idle");
@@ -183,6 +191,10 @@ export default function Dashboard() {
                         }
                     )
                 );
+            }
+            if (msg.type === "error") {
+                alert(msg.message);
+                setStatus("idle");
             }
         };
 
@@ -346,6 +358,8 @@ export default function Dashboard() {
                     null
                 );
             }}
+            onOpenAdmin={openAdmin}
+            isAdmin={admin}
         >
             <Sidebar
                 connections={
@@ -429,6 +443,11 @@ export default function Dashboard() {
 
             <div className="flex flex-col flex-1 min-h-0 h-full overflow-hidden bg-[#0a0a0a]">
 
+                {view === "admin" && (
+                    <div className="flex-1 p-8 overflow-y-auto">
+                        <AdminPanel onBack={() => setView("empty")} />
+                    </div>
+                )}
                 {view ===
                     "terminal" && (
                         <TerminalTabs
