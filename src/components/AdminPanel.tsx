@@ -14,9 +14,10 @@ export default function AdminPanel({ onBack }: { onBack: () => void }) {
     const [loading, setLoading] = useState(false);
 
     const token = getToken();
+    const apiUrl = import.meta.env.VITE_API_URL;
 
     const loadUsers = async () => {
-        const res = await fetch("http://127.0.0.1:8000/admin/users", {
+        const res = await fetch(apiUrl + "/admin/users", {
             headers: {
                 Authorization: `Bearer ${token}`,
             },
@@ -37,7 +38,7 @@ export default function AdminPanel({ onBack }: { onBack: () => void }) {
 
         setLoading(true);
 
-        await fetch("http://127.0.0.1:8000/admin/users", {
+        await fetch(apiUrl + "/admin/users", {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
@@ -53,7 +54,7 @@ export default function AdminPanel({ onBack }: { onBack: () => void }) {
     };
 
     const disableUser = async (email: string) => {
-        await fetch("http://127.0.0.1:8000/admin/users", {
+        await fetch(apiUrl + "/admin/users", {
             method: "DELETE",
             headers: {
                 "Content-Type": "application/json",

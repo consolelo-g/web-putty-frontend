@@ -37,6 +37,10 @@ export default function Dashboard() {
 
     const admin = isAdmin();
 
+    const wsUrl = import.meta.env.VITE_WS_URL;
+
+    const apiUrl = import.meta.env.VITE_API_URL;
+
     const openAdmin = () => {
         setView("admin");
     };
@@ -94,7 +98,7 @@ export default function Dashboard() {
 
             const res =
                 await fetch(
-                    "http://127.0.0.1:8000/sessions/",
+                    apiUrl + "/sessions/",
                     {
                         headers: {
                             Authorization:
@@ -127,7 +131,7 @@ export default function Dashboard() {
 
         const socket =
             new WebSocket(
-                `ws://127.0.0.1:8000/terminal/ws?token=${token}`
+                wsUrl + `/terminal/ws?token=${token}`
             );
 
         socketRef.current =

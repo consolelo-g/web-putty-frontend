@@ -8,6 +8,10 @@ export default function Login() {
 
     const [step, setStep] = useState<"email" | "otp">("email");
 
+    const wsUrl = import.meta.env.VITE_WS_URL;
+
+    const apiUrl = import.meta.env.VITE_API_URL;
+
     const [email, setEmail] = useState("");
     const [otp, setOtp] = useState("");
 
@@ -25,7 +29,7 @@ export default function Login() {
             setError("");
 
             const res = await fetch(
-                "http://127.0.0.1:8000/auth/request-otp",
+                apiUrl + "/auth/request-otp",
                 {
                     method: "POST",
                     headers: {
@@ -57,7 +61,7 @@ export default function Login() {
             setError("");
 
             const res = await fetch(
-                "http://127.0.0.1:8000/auth/verify-otp",
+                apiUrl + "/auth/verify-otp",
                 {
                     method: "POST",
                     headers: {
